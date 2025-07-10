@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手勢辨識系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #4a5568;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls {
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin: 0 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn.stop {
+            background: linear-gradient(45deg, #e53e3e, #c53030);
+        }
+
+        .webcam-section {
+            margin-bottom: 40px;
+        }
+
+        #webcam-container {
+            display: inline-block;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        #webcam-container canvas {
+            width: 400px !important;
+            height: 400px !important;
+            object-fit: cover;
+        }
+
+        .status {
+            font-size: 18px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .status.active {
+            color: #38a169;
+        }
+
+        .status.inactive {
+            color: #e53e3e;
+        }
+
+        .predictions-section {
+            margin-top: 30px;
+        }
+
+        .predictions-title {
+            font-size: 24px;
+            color: #4a5568;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .prediction-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .prediction-label {
+            font-size: 18px;
+            font-weight: bold;
+            width: 150px;
+            text-align: left;
+            color: #4a5568;
+        }
+
+        .prediction-bar-container {
+            flex: 1;
+            height: 30px;
+            background: #e2e8f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 0 15px;
+            position: relative;
+        }
+
+        .prediction-bar {
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 15px;
+            position: relative;
+        }
+
+        .prediction-bar.rank-1 {
+            background: linear-gradient(45deg, #e53e3e, #c53030);
+            box-shadow: 0 2px 10px rgba(229, 62, 62, 0.3);
+        }
+
+        .prediction-bar.rank-2 {
+            background: linear-gradient(45deg, #d69e2e, #b7791f);
+            box-shadow: 0 2px 10px rgba(214, 158, 46, 0.3);
+        }
+
+        .prediction-bar.rank-other {
+            background: linear-gradient(45deg, #a0aec0, #718096);
+        }
+
+        .prediction-percentage {
+            font-size: 16px;
+            font-weight: bold;
+            color: #4a5568;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .loading {
+            display: none;
+            font-size: 18px;
+            color: #667eea;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #e53e3e;
+            font-size: 18px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 手勢辨識系統</h1>
+        
+        <div class="controls">
+            <button class="btn" id="startBtn" onclick="init()">🎥 開始辨識</button>
+            <button class="btn stop" id="stopBtn" onclick="stop()" style="display: none;">⏹️ 停止辨識</button>
+        </div>
+
+        <div class="status inactive" id="status">請點擊開始按鈕啟動攝影機</div>
+
+        <div class="webcam-section">
+            <div id="webcam-container"></div>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                正在載入模型...
+            </div>
+        </div>
+
+        <div class="predictions-section">
+            <div class="predictions-title">🎯 辨識結果</div>
+            <div id="label-container"></div>
+        </div>
+
+        <div class="error" id="error"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        const URL = "https://teachablemachine.withgoogle.com/models/TqculoW3To/";
+        
+        let model, webcam, labelContainer, maxPredictions;
+        let isRunning = false;
+        let animationId;
+
+        // 更新狀態顯示
+        function updateStatus(message, isActive) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = isActive ? 'status active' : 'status inactive';
+        }
+
+        // 顯示錯誤訊息
+        function showError(message) {
+            const errorElement = document.getElementById('error');
+            errorElement.textContent = message;
+            setTimeout(() => {
+                errorElement.textContent = '';
+            }, 5000);
+        }
+
+        // 載入模型和設定攝影機
+        async function init() {
+            if (isRunning) return;
+            
+            try {
+                document.getElementById('loading').classList.add('show');
+                document.getElementById('startBtn').disabled = true;
+                updateStatus('正在載入模型...', false);
+
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+
+                // 載入模型
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+
+                updateStatus('正在啟動攝影機...', false);
+
+                // 設定攝影機
+                const flip = true;
+                webcam = new tmImage.Webcam(400, 400, flip);
+                await webcam.setup();
+                await webcam.play();
+
+                // 開始預測循環
+                isRunning = true;
+                loop();
+
+                // 更新 DOM
+                const webcamContainer = document.getElementById("webcam-container");
+                webcamContainer.innerHTML = '';
+                webcamContainer.appendChild(webcam.canvas);
+                
+                // 創建預測顯示元素
+                labelContainer = document.getElementById("label-container");
+                labelContainer.innerHTML = '';
+                
+                for (let i = 0; i < maxPredictions; i++) {
+                    const predictionItem = document.createElement("div");
+                    predictionItem.className = "prediction-item";
+                    predictionItem.innerHTML = `
+                        <div class="prediction-label"></div>
+                        <div class="prediction-bar-container">
+                            <div class="prediction-bar" style="width: 0%"></div>
+                        </div>
+                        <div class="prediction-percentage">0%</div>
+                    `;
+                    labelContainer.appendChild(predictionItem);
+                }
+
+                // 更新按鈕狀態
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'inline-block';
+                document.getElementById('loading').classList.remove('show');
+                updateStatus('攝影機已啟動，正在進行辨識...', true);
+
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                showError('啟動失敗，請確認攝影機權限並重試');
+                document.getElementById('loading').classList.remove('show');
+                document.getElementById('startBtn').disabled = false;
+                updateStatus('啟動失敗', false);
+            }
+        }
+
+        // 停止攝影機
+        async function stop() {
+            if (!isRunning) return;
+            
+            isRunning = false;
+            
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            
+            if (webcam) {
+                webcam.stop();
+            }
+
+            // 清理 DOM
+            document.getElementById("webcam-container").innerHTML = '';
+            document.getElementById("label-container").innerHTML = '';
+            
+            // 更新按鈕狀態
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'none';
+            document.getElementById('startBtn').disabled = false;
+            
+            updateStatus('攝影機已停止', false);
+        }
+
+        // 預測循環
+        async function loop() {
+            if (!isRunning) return;
+            
+            webcam.update();
+            await predict();
+            animationId = requestAnimationFrame(loop);
+        }
+
+        // 執行預測
+        async function predict() {
+            if (!model || !webcam) return;
+            
+            try {
+                const prediction = await model.predict(webcam.canvas);
+                
+                // 排序預測結果
+                const sortedPredictions = prediction
+                    .map((pred, index) => ({ ...pred, index }))
+                    .sort((a, b) => b.probability - a.probability);
+
+                // 更新顯示
+                for (let i = 0; i < maxPredictions; i++) {
+                    const predictionItem = labelContainer.childNodes[i];
+                    const pred = prediction[i];
+                    const percentage = (pred.probability * 100).toFixed(1);
+                    
+                    // 找出這個預測的排名
+                    const rank = sortedPredictions.findIndex(p => p.index === i);
+                    
+                    // 更新內容
+                    predictionItem.querySelector('.prediction-label').textContent = pred.className;
+                    predictionItem.querySelector('.prediction-percentage').textContent = percentage + '%';
+                    
+                    // 更新進度條
+                    const bar = predictionItem.querySelector('.prediction-bar');
+                    bar.style.width = percentage + '%';
+                    
+                    // 設定顏色
+                    bar.className = 'prediction-bar';
+                    if (rank === 0) {
+                        bar.classList.add('rank-1');
+                    } else if (rank === 1) {
+                        bar.classList.add('rank-2');
+                    } else {
+                        bar.classList.add('rank-other');
+                    }
+                }
+            } catch (error) {
+                console.error('預測失敗:', error);
+            }
+        }
+
+        // 處理頁面關閉
+        window.addEventListener('beforeunload', () => {
+            if (isRunning) {
+                stop();
+            }
+        });
+    </script>
+</body>
+</html>
